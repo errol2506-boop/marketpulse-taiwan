@@ -1,0 +1,38 @@
+name: MarketPulse Taiwan Daily Advice
+
+on:
+  schedule:
+    # Asia/Taipei 07:00 = UTC 23:00 on the previous day.
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+jobs:
+  daily-advice:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Run tests
+        run: node --test
+
+      - name: Run MarketPulse Taiwan daily advice
+        run: node ./src/runDailyAdvice.js
+
+      - name: Upload daily advice artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketpulse-taiwan-daily-advice
+          path: |
+            runs/*/daily-investment-advice.md
+            runs/*/pipeline-daily-advice-report.txt
+            runs/*/pipeline-daily-advice-result.json
+            runs/*/evidence-daily-advice.json

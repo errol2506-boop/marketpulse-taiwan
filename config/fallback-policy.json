@@ -1,0 +1,77 @@
+{
+  "mode": "CONTINUE_ON_BLOCKED",
+  "rules": [
+    {
+      "domain": "TW_STOCK_OHLCV",
+      "symbol": "3711",
+      "fallbacks": ["TWSE_STOCK_DAY"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    },
+    {
+      "domain": "TW_STOCK_OHLCV",
+      "symbol": "2408",
+      "fallbacks": ["TWSE_STOCK_DAY"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    },
+    {
+      "domain": "TW_STOCK_OHLCV",
+      "symbol": "1303",
+      "fallbacks": ["TWSE_STOCK_DAY"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    },
+    {
+      "domain": "TW_STOCK_OHLCV",
+      "symbol": "6538",
+      "fallbacks": ["YAHOO_CHART_FALLBACK"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    },
+    {
+      "domain": "TX_OVERNIGHT",
+      "fallbacks": ["TAIFEX_OPENAPI_DAILY_MARKET_REPORT_FUT"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    },
+    {
+      "domain": "VIX_RISK",
+      "fallbacks": ["YAHOO_CHART_FALLBACK"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    },
+    {
+      "domain": "US_EQUITY",
+      "fallbacks": ["YAHOO_CHART_FALLBACK"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    },
+    {
+      "domain": "BROKER_FLOW",
+      "fallbacks": ["FUBON_EBROKERDJ_PUBLIC_HTML"],
+      "ifAllFail": "IGNORE_FOR_PIPELINE_KEEP_MISSING_INPUT"
+    }
+  ],
+  "removedEntries": [
+    {
+      "name": "TWSE_BSR_OFFICIAL",
+      "reason": "CAPTCHA required; not suitable for automation"
+    },
+    {
+      "name": "TPEX_BROKERBS_OFFICIAL",
+      "reason": "Turnstile/Cloudflare challenge required; not suitable for automation"
+    },
+    {
+      "name": "STOOQ_CSV_FALLBACK",
+      "reason": "Returned browser verification page during test"
+    },
+    {
+      "name": "FRED_VIXCLS_FALLBACK",
+      "reason": "Timed out during test"
+    },
+    {
+      "name": "HISTOCK_PUBLIC_HTML",
+      "reason": "Readable but parser not implemented; disabled until verified"
+    }
+  ],
+  "governance": {
+    "doNotFabricateValues": true,
+    "doNotPromotePartialToCB10": true,
+    "allowPipelineCompletionWithNoProduction": true,
+    "researchOnlySourcesDoNotFeedChampion": true
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "status": "DISABLED_UNTIL_LIVE_E2E_PASS",
+  "timezone": "Asia/Taipei",
+  "stages": [
+    {
+      "time": "previous-trading-day-close",
+      "task": "TW_STOCK_AND_BROKER_CAPTURE",
+      "enabled": false
+    },
+    {
+      "time": "after-us-market-close",
+      "task": "US4_AND_VIX_CAPTURE",
+      "enabled": false
+    },
+    {
+      "time": "05:00",
+      "task": "TX_OVERNIGHT_CAPTURE",
+      "enabled": false
+    },
+    {
+      "time": "06:00",
+      "task": "EVIDENCE_COMPLETENESS_PREFLIGHT",
+      "enabled": false
+    },
+    {
+      "time": "06:30",
+      "task": "DECISION_CUTOFF_FREEZE",
+      "enabled": false
+    },
+    {
+      "time": "06:35",
+      "task": "CB10_AND_V4R12_PIPELINE",
+      "enabled": false
+    },
+    {
+      "time": "after-tw-market-close",
+      "task": "OUTCOME_ATTRIBUTION_DRIFT",
+      "enabled": false
+    }
+  ],
+  "activationGate": [
+    "Capture -> Evidence_Store live E2E PASS",
+    "Evidence_Store -> Decision_Cutoff_Snapshot live E2E PASS",
+    "Snapshot -> CB1.0 adapter PASS",
+    "Snapshot -> V4R1.2 adapter PASS",
+    "PITViolationCount = 0",
+    "No TEST fixture in Production",
+    "All critical Evidence_E2E_Test rows PASS"
+  ]
+}

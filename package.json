@@ -1,0 +1,14 @@
+{
+  "name": "marketpulse-taiwan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "evidence-guard": "./src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "validate": "node ./src/cli.js",
+    "daily": "node ./src/runDailyAdvice.js"
+  }
+}
