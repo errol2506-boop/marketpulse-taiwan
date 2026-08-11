@@ -9,6 +9,7 @@
   "scripts": {
     "test": "node --test",
     "validate": "node ./src/cli.js",
-    "daily": "node ./src/runDailyAdvice.js"
+    "daily": "node ./src/runDailyAdvice.js",
+    "email": "node ./src/sendDailyEmail.js"
   }
 }

@@ -6,7 +6,7 @@ import { runEvidenceDecisionPipeline, formatPipelineReport } from "./pipeline.js
 
 function parseArgs(argv) {
   const args = {
-    date: new Date().toISOString().slice(0, 10),
+    date: taipeiDate(),
     cutoff: "",
     outputDir: "",
   };
@@ -25,6 +25,17 @@ function parseArgs(argv) {
   }
 
   return args;
+}
+
+function taipeiDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
 }
 
 function defaultCutoff(date) {

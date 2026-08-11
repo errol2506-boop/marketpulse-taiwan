@@ -25,8 +25,11 @@ jobs:
       - name: Run tests
         run: node --test
 
+      - name: Set Taiwan date
+        run: echo "MARKETPULSE_DATE=$(TZ=Asia/Taipei date +%F)" >> "$GITHUB_ENV"
+
       - name: Run MarketPulse Taiwan daily advice
-        run: node ./src/runDailyAdvice.js
+        run: node ./src/runDailyAdvice.js --date "$MARKETPULSE_DATE"
 
       - name: Upload daily advice artifact
         uses: actions/upload-artifact@v4
@@ -37,3 +40,14 @@ jobs:
             runs/*/pipeline-daily-advice-report.txt
             runs/*/pipeline-daily-advice-result.json
             runs/*/evidence-daily-advice.json
+
+      - name: Email daily advice
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: node ./src/sendDailyEmail.js --date "$MARKETPULSE_DATE"
