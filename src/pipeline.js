@@ -24,24 +24,72 @@ function actionFromScore(score) {
   return "HOLD";
 }
 
-function buildRelaxedDecisions(validation) {
+function recommendationFromScore(score) {
+  if (score >= 0.025) {
+    return "強烈買進";
+  }
+  if (score >= 0.012) {
+    return "買進";
+  }
+  if (score <= -0.025) {
+    return "強烈賣出";
+  }
+  if (score <= -0.012) {
+    return "賣出";
+  }
+  return "持有";
+}
+
+function buildFallbackHorizonRecommendations(score) {
+  const scores = {
+    oneWeek: score,
+    twoWeeks: score * 0.9,
+    oneMonth: score * 0.75,
+    sixMonths: score * 0.6,
+  };
+
+  return {
+    oneWeek: { label: "1周內", score: scores.oneWeek, recommendation: recommendationFromScore(scores.oneWeek) },
+    twoWeeks: { label: "2周內", score: scores.twoWeeks, recommendation: recommendationFromScore(scores.twoWeeks) },
+    oneMonth: { label: "1個月內", score: scores.oneMonth, recommendation: recommendationFromScore(scores.oneMonth) },
+    sixMonths: { label: "6個月內", score: scores.sixMonths, recommendation: recommendationFromScore(scores.sixMonths) },
+  };
+}
+
+function buildRelaxedDecisions(validation, source = "CB1.0_RELAXED_FALLBACK") {
   const selected = validation.selectedEvidence;
-  const bySymbol = new Map(selected.filter((row) => row.Symbol).map((row) => [row.Symbol, row]));
-  const usRows = ["TSM", "NVDA", "AMD", "AVGO"].map((symbol) => bySymbol.get(symbol)).filter(Boolean);
+  const twBySymbol = new Map(
+    selected
+      .filter((row) => row.Domain === "TW_STOCK_OHLCV" && row.Symbol)
+      .map((row) => [row.Symbol, row]),
+  );
+  const usBySymbol = new Map(
+    selected
+      .filter((row) => row.Domain === "US_EQUITY" && row.Symbol)
+      .map((row) => [row.Symbol, row]),
+  );
+  const usRows = ["TSM", "NVDA", "AMD", "AVGO"].map((symbol) => usBySymbol.get(symbol)).filter(Boolean);
   const vix = selected.find((row) => row.Domain === "VIX_RISK");
   const usMomentum = usRows.length > 0 ? usRows.reduce((sum, row) => sum + pctChange(row), 0) / usRows.length : 0;
   const vixClose = Number(vix?.CloseLast);
   const vixRisk = Number.isFinite(vixClose) ? Math.max(-0.02, Math.min(0.02, (18 - vixClose) / 1000)) : 0;
 
   return DASHBOARD_SYMBOLS.map((symbol) => {
-    const row = bySymbol.get(symbol);
+    const row = twBySymbol.get(symbol);
     if (!row) {
       return {
         symbol,
         action: "HOLD",
         confidence: "LOW_CONFIDENCE",
         score: 0,
-        why: "No symbol price evidence; default relaxed action is HOLD.",
+        recommendation: "持有",
+        horizonRecommendations: buildFallbackHorizonRecommendations(0),
+        actionSource: source,
+        why:
+          `No TW_STOCK_OHLCV price evidence for ${symbol}; default fallback action is HOLD. ` +
+          (validation.missingInputs.length > 0
+            ? `Strict CB1.0 remains NO_PRODUCTION because missing inputs: ${validation.missingInputs.join(", ")}.`
+            : ""),
       };
     }
 
@@ -55,7 +103,15 @@ function buildRelaxedDecisions(validation) {
       action,
       confidence,
       score,
-      why: `Relaxed fallback score=${score.toFixed(4)} from own=${ownMomentum.toFixed(4)}, us4=${usMomentum.toFixed(4)}, vixRisk=${vixRisk.toFixed(4)}.`,
+      recommendation: recommendationFromScore(score),
+      horizonRecommendations: buildFallbackHorizonRecommendations(score),
+      actionSource: source,
+      why:
+        `${source} score=${score.toFixed(4)} from ` +
+        `own=${ownMomentum.toFixed(4)}, us4=${usMomentum.toFixed(4)}, vixRisk=${vixRisk.toFixed(4)}. ` +
+        (validation.missingInputs.length > 0
+          ? `Strict CB1.0 remains NO_PRODUCTION because missing inputs: ${validation.missingInputs.join(", ")}.`
+          : "Strict CB1.0 unavailable; fallback generated dashboard recommendations."),
     };
   });
 }
@@ -95,12 +151,17 @@ function buildModelInputs(validation, options) {
   const selectedRows = validation.selectedEvidenceIds.map((id) => evidenceById.get(id)).filter(Boolean);
   const relaxed = options.decisionPolicy === "RELAXED";
   const cb10Runtime = relaxed ? null : runCb10Runtime(validation);
-  const relaxedDecisions = relaxed ? buildRelaxedDecisions(validation) : [];
+  const needsDegradedFallback = !relaxed && cb10Runtime?.status !== "READY" && validation.selectedCount > 0;
+  const fallbackSource = relaxed ? "CB1.0_RELAXED_FALLBACK" : "CB1.0_DEGRADED_FALLBACK";
+  const relaxedDecisions = relaxed || needsDegradedFallback ? buildRelaxedDecisions(validation, fallbackSource) : [];
   const hasRelaxedDecision = relaxedDecisions.length > 0 && validation.selectedCount > 0;
+  const hasDegradedDecision = needsDegradedFallback && hasRelaxedDecision;
   const hasCb10RuntimeDecision = cb10Runtime?.status === "READY";
   const status =
-    hasRelaxedDecision
+    relaxed && hasRelaxedDecision
       ? "RELAXED_DECISION"
+      : hasDegradedDecision
+        ? "DEGRADED_COMPLETE"
       : hasCb10RuntimeDecision && validation.v4r12 === "READY"
         ? "READY"
       : validation.cb10 === "READY" && validation.v4r12 === "READY"
@@ -111,9 +172,9 @@ function buildModelInputs(validation, options) {
     status,
     coverageLevel: validation.coverageLevel,
     cb10: {
-      status: hasRelaxedDecision ? "RELAXED_READY" : hasCb10RuntimeDecision ? "READY" : validation.cb10,
+      status: relaxed && hasRelaxedDecision ? "RELAXED_READY" : hasDegradedDecision ? "DEGRADED_READY" : hasCb10RuntimeDecision ? "READY" : validation.cb10,
       actionSource: hasRelaxedDecision
-        ? "CB1.0_RELAXED_FALLBACK"
+        ? fallbackSource
         : cb10Runtime?.actionSource || "CB1.0_EXECUTABLE_V1",
       decision: hasRelaxedDecision
         ? "BUY_HOLD_REDUCE_AVAILABLE"
@@ -136,7 +197,7 @@ function buildModelInputs(validation, options) {
 function buildDashboard(validation, modelInputs, snapshot) {
   const runtimeBySymbol = new Map(modelInputs.cb10.runtimeDecisions.map((decision) => [decision.symbol, decision]));
   const relaxedBySymbol = new Map(modelInputs.cb10.relaxedDecisions.map((decision) => [decision.symbol, decision]));
-  const canProduceOfficial = modelInputs.cb10.status === "READY" || modelInputs.cb10.status === "RELAXED_READY";
+  const canProduceOfficial = ["READY", "RELAXED_READY", "DEGRADED_READY"].includes(modelInputs.cb10.status);
   const canProduceResearch = modelInputs.v4r12.status === "READY";
   return {
     snapshotId: snapshot.snapshotId,
@@ -154,11 +215,26 @@ function buildDashboard(validation, modelInputs, snapshot) {
           runtimeBySymbol.get(symbol)?.action ||
           relaxedBySymbol.get(symbol)?.action ||
           "NO_PRODUCTION",
-        recommendation1w: runtimeBySymbol.get(symbol)?.horizonRecommendations?.oneWeek?.recommendation || "",
-        recommendation2w: runtimeBySymbol.get(symbol)?.horizonRecommendations?.twoWeeks?.recommendation || "",
-        recommendation1m: runtimeBySymbol.get(symbol)?.horizonRecommendations?.oneMonth?.recommendation || "",
-        recommendation6m: runtimeBySymbol.get(symbol)?.horizonRecommendations?.sixMonths?.recommendation || "",
-        horizonRecommendations: runtimeBySymbol.get(symbol)?.horizonRecommendations || {},
+        recommendation1w:
+          runtimeBySymbol.get(symbol)?.horizonRecommendations?.oneWeek?.recommendation ||
+          relaxedBySymbol.get(symbol)?.horizonRecommendations?.oneWeek?.recommendation ||
+          "",
+        recommendation2w:
+          runtimeBySymbol.get(symbol)?.horizonRecommendations?.twoWeeks?.recommendation ||
+          relaxedBySymbol.get(symbol)?.horizonRecommendations?.twoWeeks?.recommendation ||
+          "",
+        recommendation1m:
+          runtimeBySymbol.get(symbol)?.horizonRecommendations?.oneMonth?.recommendation ||
+          relaxedBySymbol.get(symbol)?.horizonRecommendations?.oneMonth?.recommendation ||
+          "",
+        recommendation6m:
+          runtimeBySymbol.get(symbol)?.horizonRecommendations?.sixMonths?.recommendation ||
+          relaxedBySymbol.get(symbol)?.horizonRecommendations?.sixMonths?.recommendation ||
+          "",
+        horizonRecommendations:
+          runtimeBySymbol.get(symbol)?.horizonRecommendations ||
+          relaxedBySymbol.get(symbol)?.horizonRecommendations ||
+          {},
         actionSource: modelInputs.cb10.actionSource,
         researchD1: canProduceResearch ? "PENDING_FROZEN_MODEL_RUNTIME" : "UNASSESSED",
         researchD3: canProduceResearch ? "PENDING_FROZEN_MODEL_RUNTIME" : "UNASSESSED",
@@ -191,7 +267,13 @@ export function runEvidenceDecisionPipeline(rows, options = {}) {
     status: modelInputs.status,
     completed: true,
     completionMode:
-      modelInputs.status === "READY" ? "FULL" : modelInputs.status === "RELAXED_DECISION" ? "RELAXED_FALLBACK" : "DEGRADED_CONTINUED",
+      modelInputs.status === "READY"
+        ? "FULL"
+        : modelInputs.status === "RELAXED_DECISION"
+          ? "RELAXED_FALLBACK"
+          : modelInputs.status === "DEGRADED_COMPLETE"
+            ? "DEGRADED_COMPLETE"
+            : "DEGRADED_CONTINUED",
     validation,
     snapshot,
     modelInputs,

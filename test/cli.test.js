@@ -50,7 +50,7 @@ test("CLI can continue with exit zero when evidence is blocked", async () => {
   });
 
   assert.equal(run.status, 0);
-  assert.match(run.stdout, /completionMode: DEGRADED_CONTINUED/);
+  assert.match(run.stdout, /completionMode: DEGRADED_COMPLETE/);
   assert.match(run.stdout, /NO_PRODUCTION/);
 });
 

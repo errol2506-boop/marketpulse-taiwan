@@ -32,19 +32,60 @@ test("pipeline builds snapshot, model input status, dashboard rows, and market a
   assert.ok(Number.isFinite(result.marketAnalysis.scenarioProbabilities.consolidation));
 });
 
-test("pipeline blocks dashboard production when evidence is partial", () => {
+test("pipeline degrades dashboard production when evidence is partial", () => {
   const rows = completeFixture().filter((row) => row.EvidenceID !== "TX-1");
   const result = runEvidenceDecisionPipeline(rows, {
     cutoff: "2026-08-11T06:30:00+08:00",
   });
 
-  assert.equal(result.status, "BLOCKED");
+  assert.equal(result.status, "DEGRADED_COMPLETE");
   assert.equal(result.completed, true);
-  assert.equal(result.completionMode, "DEGRADED_CONTINUED");
-  assert.equal(result.modelInputs.cb10.decision, "NO_PRODUCTION");
-  assert.equal(result.dashboard.rows[0].officialAction, "NO_PRODUCTION");
-  assert.equal(result.dashboard.rows[0].runState, "DEGRADED_CONTINUED");
+  assert.equal(result.completionMode, "DEGRADED_COMPLETE");
+  assert.equal(result.validation.cb10, "NO_PRODUCTION");
+  assert.equal(result.modelInputs.cb10.status, "DEGRADED_READY");
+  assert.equal(result.modelInputs.cb10.actionSource, "CB1.0_DEGRADED_FALLBACK");
+  assert.equal(result.modelInputs.cb10.decision, "BUY_HOLD_REDUCE_AVAILABLE");
+  assert.ok(["BUY", "HOLD", "REDUCE"].includes(result.dashboard.rows[0].officialAction));
+  assert.ok(allowedRecommendations.has(result.dashboard.rows[0].recommendation1w));
+  assert.ok(allowedRecommendations.has(result.dashboard.rows[0].recommendation2w));
+  assert.ok(allowedRecommendations.has(result.dashboard.rows[0].recommendation1m));
+  assert.ok(allowedRecommendations.has(result.dashboard.rows[0].recommendation6m));
+  assert.equal(result.dashboard.rows[0].runState, "DEGRADED_READY");
   assert.match(result.dashboard.rows[0].why, /TX_OVERNIGHT/);
+});
+
+test("degraded fallback does not use industry rows as tracked stock OHLCV", () => {
+  const rows = completeFixture().filter((row) => row.EvidenceID !== "TW-3711");
+  rows.push(
+    baseEvidenceRow({
+      EvidenceID: "SEMI-COWOS-3711",
+      Domain: "SEMICONDUCTOR_INDUSTRY",
+      FeatureGroup: "RELATIVE_STRENGTH",
+      Symbol: "3711",
+      Open: 100,
+      High: 150,
+      Low: 99,
+      CloseLast: 150,
+      Volume: 1000,
+      TextValue: JSON.stringify({ segmentId: "COWOS_ADVANCED_PACKAGING", segmentName: "CoWoS" }),
+      QualityTier: "PUBLIC_CONTEXT",
+      SourceTier: "PUBLIC_FALLBACK",
+      SourceID: "YAHOO_CHART_FALLBACK",
+      SourceIdentifier: "https://query1.finance.yahoo.com/v8/finance/chart/3711.TW",
+      ChampionEligible: false,
+      ResearchEligible: true,
+    }),
+  );
+
+  const result = runEvidenceDecisionPipeline(rows, {
+    cutoff: "2026-08-11T06:30:00+08:00",
+  });
+  const row3711 = result.dashboard.rows.find((row) => row.symbol === "3711");
+
+  assert.equal(result.status, "DEGRADED_COMPLETE");
+  assert.equal(row3711.officialAction, "HOLD");
+  assert.equal(row3711.recommendation1w, "持有");
+  assert.match(row3711.why, /No TW_STOCK_OHLCV price evidence/);
 });
 
 test("pipeline report is human-readable", () => {
